@@ -1,0 +1,72 @@
+services:
+  mysql-db:
+    image: mysql:8.4
+    container_name: tock_mysql_server
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - tock-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${DB_ROOT_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: tock_bun_backend
+    restart: on-failure
+    environment:
+      DB_HOST: mysql-db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      PORT: 3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - tock-network
+
+  frontend:
+    build:
+      context: ../tock-frontend
+      dockerfile: Dockerfile.dev
+    container_name: tock_angular_frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      - ../tock-frontend:/app
+      - /app/node_modules
+    networks:
+      - tock-network
+
+networks:
+  tock-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
