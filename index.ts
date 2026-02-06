@@ -1,6 +1,10 @@
 import express from "express";
 import router from "./routes/routes";
 
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 const app = express();
 const port = process.env.PORT;
 

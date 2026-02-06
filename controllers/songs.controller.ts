@@ -65,3 +65,29 @@ export const getSongFile = async (
     res.status(500).json({ error: "Error al obtener el archivo" });
   }
 };
+
+export const getAllSongs = async (
+  req: Request,
+  res: Response,
+): Promise<any> => {
+  const userId = req.userId;
+
+  if (!userId) return res.status(401).json({ error: "Token inválido" });
+
+  try {
+    const songs = await prisma.song.findMany({
+      where: { user_id: userId },
+      select: {
+        id: true,
+        title: true,
+        file_size: true,
+        created_at: true,
+      },
+    });
+
+    return res.json(songs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener las canciones" });
+  }
+};
