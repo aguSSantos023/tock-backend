@@ -1,8 +1,6 @@
 import type { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../utils/db";
 import { generateToken } from "../utils/jwt";
-
-const prisma = new PrismaClient();
 
 export const register = async (req: Request, res: Response): Promise<any> => {
   try {

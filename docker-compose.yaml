@@ -51,6 +51,7 @@ services:
         condition: service_healthy
     networks:
       - tock-network
+    command: sh -c "bunx prisma generate && bun --watch index.ts"
 
   frontend:
     build:
