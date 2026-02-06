@@ -85,7 +85,15 @@ export const getAllSongs = async (
       },
     });
 
-    return res.json(songs);
+    const songsReady = songs.map((song) => ({
+      id: song.id,
+      title: song.title,
+      file_size: song.file_size,
+      created_at: song.created_at,
+      audio_url: `/api/songs/${song.id}/audio`,
+    }));
+
+    return res.json(songsReady);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener las canciones" });
