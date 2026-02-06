@@ -1,6 +1,7 @@
 import { prisma } from "../utils/db";
 import type { Request, Response } from "express";
 import fs from "fs";
+import path from "path";
 
 export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   const file = req.file;
@@ -40,5 +41,27 @@ export const uploadSong = async (req: Request, res: Response): Promise<any> => {
     if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
     return res.status(500).json({ message: "Error al guardar la canción" });
+  }
+};
+
+export const getSongFile = async (
+  req: Request,
+  res: Response,
+): Promise<any> => {
+  const { id } = req.params;
+
+  try {
+    const song = await prisma.song.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!song) return res.status(404).json({ error: "Canción no encontrada" });
+
+    const absolutePath = path.join(process.cwd(), song.file_path);
+
+    res.sendFile(absolutePath);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener el archivo" });
   }
 };
