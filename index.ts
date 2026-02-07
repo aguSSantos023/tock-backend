@@ -1,5 +1,6 @@
 import express from "express";
 import router from "./routes/routes";
+import cors from "cors";
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -7,6 +8,13 @@ import router from "./routes/routes";
 
 const app = express();
 const port = process.env.PORT;
+
+app.use(
+  cors({
+    origin: "http://localhost:4200",
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 
