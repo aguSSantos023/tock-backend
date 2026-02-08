@@ -5,7 +5,8 @@ import path from "path";
 
 export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   const file = req.file;
-  const { title } = req.body;
+  const rawTitle = req.body.title || "";
+  const title = rawTitle.trim();
   const userId = req.userId;
 
   if (!file) {
@@ -18,20 +19,55 @@ export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   }
 
   try {
-    const newSong = await prisma.song.create({
-      data: {
-        title: title,
-        file_path: file.path,
-        file_size: file.size, // Multer nos da el tamaño en bytes
-        user_id: userId!,
-      },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { storage_used: true, storage_limit: true },
+    });
+
+    if (!user) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const newFileSize = BigInt(file.size);
+    const totalAfterUpload = user.storage_used + newFileSize;
+
+    if (totalAfterUpload > user.storage_limit) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+      return res.status(403).json({
+        error:
+          "Límite de almacenamiento excedido. No puedes subir más canciones.",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const song = await tx.song.create({
+        data: {
+          title: title,
+          file_path: file.path,
+          file_size: file.size,
+          user_id: userId!,
+        },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          storage_used: {
+            increment: file.size,
+          },
+        },
+      });
+
+      return song;
     });
 
     return res.status(201).json({
       message: "Canción subida con éxito",
       song: {
-        ...newSong,
-        file_size: newSong.file_size.toString(),
+        ...result,
+        file_size: result.file_size.toString(),
       },
     });
   } catch (error) {
@@ -97,5 +133,40 @@ export const getAllSongs = async (
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener las canciones" });
+  }
+};
+
+export const deleteSong = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  try {
+    const song = await prisma.song.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!song) return res.status(404).json({ error: "Canción no encontrada" });
+
+    // Verificar que la canción pertenece al usuario que la quiere borrar
+    if (song.user_id !== userId) {
+      return res
+        .status(403)
+        .json({ error: "No tienes permiso para borrar esta canción" });
+    }
+
+    // Borrar el archivo físico del disco
+    const absolutePath = path.join(process.cwd(), song.file_path);
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+
+    await prisma.song.delete({
+      where: { id: Number(id) },
+    });
+
+    return res.json({ message: "Canción eliminada correctamente" });
+  } catch (error) {
+    console.error("Error eliminando canción:", error);
+    return res.status(500).json({ error: "Error al eliminar la canción" });
   }
 };
