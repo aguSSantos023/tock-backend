@@ -19,20 +19,55 @@ export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   }
 
   try {
-    const newSong = await prisma.song.create({
-      data: {
-        title: title,
-        file_path: file.path,
-        file_size: file.size, // Multer nos da el tamaño en bytes
-        user_id: userId!,
-      },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { storage_used: true, storage_limit: true },
+    });
+
+    if (!user) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const newFileSize = BigInt(file.size);
+    const totalAfterUpload = user.storage_used + newFileSize;
+
+    if (totalAfterUpload > user.storage_limit) {
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+      return res.status(403).json({
+        error:
+          "Límite de almacenamiento excedido. No puedes subir más canciones.",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const song = await tx.song.create({
+        data: {
+          title: title,
+          file_path: file.path,
+          file_size: file.size,
+          user_id: userId!,
+        },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          storage_used: {
+            increment: file.size,
+          },
+        },
+      });
+
+      return song;
     });
 
     return res.status(201).json({
       message: "Canción subida con éxito",
       song: {
-        ...newSong,
-        file_size: newSong.file_size.toString(),
+        ...result,
+        file_size: result.file_size.toString(),
       },
     });
   } catch (error) {
