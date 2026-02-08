@@ -5,7 +5,8 @@ import path from "path";
 
 export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   const file = req.file;
-  const { title } = req.body;
+  const rawTitle = req.body.title || "";
+  const title = rawTitle.trim();
   const userId = req.userId;
 
   if (!file) {
@@ -97,5 +98,40 @@ export const getAllSongs = async (
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener las canciones" });
+  }
+};
+
+export const deleteSong = async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  try {
+    const song = await prisma.song.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!song) return res.status(404).json({ error: "Canción no encontrada" });
+
+    // Verificar que la canción pertenece al usuario que la quiere borrar
+    if (song.user_id !== userId) {
+      return res
+        .status(403)
+        .json({ error: "No tienes permiso para borrar esta canción" });
+    }
+
+    // Borrar el archivo físico del disco
+    const absolutePath = path.join(process.cwd(), song.file_path);
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+
+    await prisma.song.delete({
+      where: { id: Number(id) },
+    });
+
+    return res.json({ message: "Canción eliminada correctamente" });
+  } catch (error) {
+    console.error("Error eliminando canción:", error);
+    return res.status(500).json({ error: "Error al eliminar la canción" });
   }
 };
