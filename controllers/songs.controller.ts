@@ -160,8 +160,19 @@ export const deleteSong = async (req: Request, res: Response): Promise<any> => {
       fs.unlinkSync(absolutePath);
     }
 
-    await prisma.song.delete({
-      where: { id: Number(id) },
+    await prisma.$transaction(async (tx) => {
+      await tx.song.delete({
+        where: { id: Number(id) },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          storage_used: {
+            decrement: song.file_size,
+          },
+        },
+      });
     });
 
     return res.json({ message: "Canción eliminada correctamente" });
