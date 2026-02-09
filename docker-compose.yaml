@@ -30,7 +30,9 @@ services:
       retries: 5
 
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     container_name: tock_bun_backend
     restart: on-failure
     environment:
@@ -38,6 +40,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
       PORT: 3000
     volumes:
       - .:/app
@@ -50,6 +53,7 @@ services:
         condition: service_healthy
     networks:
       - tock-network
+    command: sh -c "bunx prisma generate && bun --watch index.ts"
 
   frontend:
     build:

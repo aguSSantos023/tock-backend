@@ -1,11 +1,24 @@
 import express from "express";
+import router from "./routes/routes";
+import cors from "cors";
+
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
 
 const app = express();
 const port = process.env.PORT;
 
-app.get("/", (req, res) => {
-  res.send("Hola desde el back 🐳");
-});
+app.use(
+  cors({
+    origin: "http://localhost:4200",
+    credentials: true,
+  }),
+);
+
+app.use(express.json());
+
+app.use("/api", router);
 
 app.listen(port, () => {
   console.log(`Servidor escuchando en http://localhost:${port}`);
