@@ -11,7 +11,10 @@ const port = process.env.PORT;
 
 app.use(
   cors({
-    origin: ["http://tock.164.68.108.131.nip.io", "http://localhost:4200"],
+    origin: [
+      "https://tock-music.agussantos.dev/auth/login",
+      "http://localhost:4200",
+    ],
     credentials: true,
   }),
 );
