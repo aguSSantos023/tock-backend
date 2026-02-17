@@ -1,6 +1,9 @@
 FROM oven/bun:1 AS base
 WORKDIR /app
 
+# Instalamos ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # Copiamos solo los archivos necesarios para instalar dependencias
 COPY package.json bun.lockb* ./
 

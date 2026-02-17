@@ -5,8 +5,7 @@ import path from "path";
 
 export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   const file = req.file;
-  const rawTitle = req.body.title || "";
-  const title = rawTitle.trim();
+  const title = req.body.title.trim() || "";
   const userId = req.userId;
 
   if (!file) {
