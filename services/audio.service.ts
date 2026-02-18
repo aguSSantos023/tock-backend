@@ -1,25 +1,18 @@
 import ffmpeg from "fluent-ffmpeg";
 
 // Extrae metadatos
-export const getOpusMetadata = (path: string) => {
+export const getMetadata = (path: string) => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(path, (err, metadata) => {
-      if (err) {
-        reject(err);
-      } else {
-        console.log(metadata.format.tags);
+      if (err) return reject(err);
 
-        resolve(metadata.format.tags);
-      }
+      resolve(metadata);
     });
   });
 };
 
 // Convierte MP3 a OPUS
-export const convertToOpusWithTags = (
-  input: string,
-  output: string,
-): Promise<void> => {
+export const convertToOpus = (input: string, output: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     ffmpeg(input)
       .toFormat("opus")

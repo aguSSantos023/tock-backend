@@ -2,6 +2,11 @@ import { prisma } from "../utils/db";
 import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import {
+  convertToOpus,
+  getMetadata,
+  stripMetadata,
+} from "../services/audio.service";
 
 export const uploadSong = async (req: Request, res: Response): Promise<any> => {
   const file = req.file;
@@ -17,58 +22,74 @@ export const uploadSong = async (req: Request, res: Response): Promise<any> => {
     return res.status(400).json({ error: "El título es obligatorio" });
   }
 
+  const tempOpusPath = path.join("uploads", `temp-${Date.now()}.opus`);
+  const finalOpusPath = path.join("uploads", `${Date.now()}.opus`);
+
   try {
+    const metadata = await getMetadata(file.path);
+
+    //Datos a guardar de la cancion
+    /*
+      - title: title || metadata.format.tags.title --- max50 min1
+      - artist: metadata.format.tags.artist || "Artista desconocido" --- max50 min1
+      - album: metadata.format.tags.album || "Single" --- max50 min1
+      - duration: Math.round(metadata.format.duration || 0)
+      - date: tags.date || null --- 9999year
+    */
+
+    console.log(metadata);
+
+    // Convertir a Opus
+    await convertToOpus(file.path, tempOpusPath);
+
+    // Limpieza de metadata
+    await stripMetadata(tempOpusPath, finalOpusPath);
+
+    // Validacion de espacio
+    const stats = fs.statSync(finalOpusPath);
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { storage_used: true, storage_limit: true },
     });
 
-    if (!user) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
-
     const newFileSize = BigInt(file.size);
     const totalAfterUpload = user.storage_used + newFileSize;
 
-    if (totalAfterUpload > user.storage_limit) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-
-      return res.status(403).json({
-        error:
-          "Límite de almacenamiento excedido. No puedes subir más canciones.",
-      });
+    // Eliminar archivo si no hay usuario o si el usuario no tiene espacio
+    if (!user || user.storage_used + totalAfterUpload > user.storage_limit) {
+      if (fs.existsSync(finalOpusPath)) fs.unlinkSync(finalOpusPath);
+      return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const song = await tx.song.create({
-        data: {
-          title: title,
-          file_path: file.path,
-          file_size: file.size,
-          user_id: userId!,
-        },
-      });
+    // const result = await prisma.$transaction(async (tx) => {
+    //   const song = await tx.song.create({
+    //     data: {
+    //       title: title,
+    //       file_path: file.path,
+    //       file_size: file.size,
+    //       user_id: userId!,
+    //     },
+    //   });
 
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          storage_used: {
-            increment: file.size,
-          },
-        },
-      });
+    //   await tx.user.update({
+    //     where: { id: userId },
+    //     data: {
+    //       storage_used: {
+    //         increment: file.size,
+    //       },
+    //     },
+    //   });
 
-      return song;
-    });
+    //   return song;
+    // });
 
-    return res.status(201).json({
-      message: "Canción subida con éxito",
-      song: {
-        ...result,
-        file_size: result.file_size.toString(),
-      },
-    });
+    // return res.status(201).json({
+    //   message: "Canción subida con éxito",
+    //   song: {
+    //     ...result,
+    //     file_size: result.file_size.toString(),
+    //   },
+    // });
   } catch (error) {
     console.error(error);
 
@@ -120,7 +141,7 @@ export const getAllSongs = async (
       },
     });
 
-    const songsReady = songs.map((song) => ({
+    const songsReady = songs.map((song: any) => ({
       id: song.id,
       title: song.title,
       file_size: song.file_size,
@@ -159,7 +180,7 @@ export const deleteSong = async (req: Request, res: Response): Promise<any> => {
       fs.unlinkSync(absolutePath);
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.song.delete({
         where: { id: Number(id) },
       });
