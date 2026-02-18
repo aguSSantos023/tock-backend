@@ -3,20 +3,21 @@ import multer from "multer";
 import path from "path";
 
 const uploadDir = "uploads";
+const tempDir = path.join("uploads", "temp");
 
-// Crear carpeta si no existe (evita crash al inicio)
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+// Crear carpeta upload si no existe (evita crash al inicio)
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+// Crear carpeta temp si no existe
+if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, tempDir);
   },
   filename: (req, file, cb) => {
     // Generar nombre único (Timestamp + Random) para evitar sobrescrituras
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    cb(null, `t-${Date.now()}-${Math.round(Math.random() * 100)}`);
   },
 });
 

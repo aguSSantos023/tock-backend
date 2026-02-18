@@ -4,99 +4,110 @@ import fs from "fs";
 import path from "path";
 import {
   convertToOpus,
+  deleteFile,
+  generateFinalName,
   getMetadata,
   stripMetadata,
 } from "../services/audio.service";
 
-export const uploadSong = async (req: Request, res: Response): Promise<any> => {
+export const uploadSong = async (
+  req: Request,
+  res: Response,
+): Promise<Response> => {
   const file = req.file;
   const title = req.body.title.trim() || "";
-  const userId = req.userId;
+  const userId = req.userId as number;
 
   if (!file) {
     return res.status(400).json({ error: "No se ha subido ningún archivo" });
   }
 
   if (!title) {
-    fs.unlinkSync(file.path);
+    deleteFile(file.path);
     return res.status(400).json({ error: "El título es obligatorio" });
   }
 
-  const tempOpusPath = path.join("uploads", `temp-${Date.now()}.opus`);
-  const finalOpusPath = path.join("uploads", `${Date.now()}.opus`);
+  const rawOpusPath = path.join(
+    "uploads",
+    "temp",
+    `raw-${Date.now()}-${Math.round(Math.random() * 10)}.opus`,
+  );
+
+  const cleanOpusPath = path.join(
+    "uploads",
+    "temp",
+    `clean-${Date.now()}-${Math.round(Math.random() * 10)}.opus`,
+  );
 
   try {
     const metadata = await getMetadata(file.path);
-
-    //Datos a guardar de la cancion
-    /*
-      - title: title || metadata.format.tags.title --- max50 min1
-      - artist: metadata.format.tags.artist || "Artista desconocido" --- max50 min1
-      - album: metadata.format.tags.album || "Single" --- max50 min1
-      - duration: Math.round(metadata.format.duration || 0)
-      - date: tags.date || null --- 9999year
-    */
-
-    console.log(metadata);
+    const tags = metadata.format.tags || {};
 
     // Convertir a Opus
-    await convertToOpus(file.path, tempOpusPath);
+    await convertToOpus(file.path, rawOpusPath);
+    deleteFile(file.path);
 
     // Limpieza de metadata
-    await stripMetadata(tempOpusPath, finalOpusPath);
+    await stripMetadata(rawOpusPath, cleanOpusPath);
+    deleteFile(rawOpusPath);
 
     // Validacion de espacio
-    const stats = fs.statSync(finalOpusPath);
+    const stats = fs.statSync(cleanOpusPath);
+    const finalSize = BigInt(stats.size);
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { storage_used: true, storage_limit: true },
     });
 
-    const newFileSize = BigInt(file.size);
-    const totalAfterUpload = user.storage_used + newFileSize;
-
-    // Eliminar archivo si no hay usuario o si el usuario no tiene espacio
-    if (!user || user.storage_used + totalAfterUpload > user.storage_limit) {
-      if (fs.existsSync(finalOpusPath)) fs.unlinkSync(finalOpusPath);
-      return res.status(404).json({ error: "Usuario no encontrado" });
+    if (!user || user.storage_used + finalSize > user.storage_limit) {
+      deleteFile(cleanOpusPath);
+      return res
+        .status(403)
+        .json({ error: "Espacio insuficiente o usuario no encontrado" });
     }
 
-    // const result = await prisma.$transaction(async (tx) => {
-    //   const song = await tx.song.create({
-    //     data: {
-    //       title: title,
-    //       file_path: file.path,
-    //       file_size: file.size,
-    //       user_id: userId!,
-    //     },
-    //   });
+    // Mover song a carpeta final (uploads/) con nombre definitivo
+    const finalFileName = generateFinalName();
+    const finalPath = path.join("uploads", finalFileName);
+    fs.renameSync(cleanOpusPath, finalPath);
 
-    //   await tx.user.update({
-    //     where: { id: userId },
-    //     data: {
-    //       storage_used: {
-    //         increment: file.size,
-    //       },
-    //     },
-    //   });
+    const result = await prisma.$transaction(async (tx: any) => {
+      const song = await tx.song.create({
+        data: {
+          title: (title || tags.title || "Sin título").substring(0, 50),
+          artist: (tags.artist || "Artista desconocido").substring(0, 50),
+          album: (tags.album || "Single").substring(0, 50),
+          duration: Math.round(metadata.format.duration || 0),
+          year: tags.date ? parseInt(tags.date.substring(0, 4)) : null,
+          file_path: finalPath,
+          file_size: finalSize,
+          user_id: userId,
+        },
+      });
 
-    //   return song;
-    // });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          storage_used: {
+            increment: finalSize,
+          },
+        },
+      });
 
-    // return res.status(201).json({
-    //   message: "Canción subida con éxito",
-    //   song: {
-    //     ...result,
-    //     file_size: result.file_size.toString(),
-    //   },
-    // });
+      return song;
+    });
+
+    return res.status(201).json(result);
   } catch (error) {
-    console.error(error);
+    const err = error as Error;
+
+    console.error(`[UPLOAD_ERROR] [User: ${userId}]: ${err.message}`);
 
     // CLEANUP: Si falla la BD se borra el archivo físico
-    if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    [file.path, rawOpusPath, cleanOpusPath].forEach(deleteFile);
 
-    return res.status(500).json({ message: "Error al guardar la canción" });
+    return res.status(500).json({ error: "Error interno procesando el audio" });
   }
 };
 
