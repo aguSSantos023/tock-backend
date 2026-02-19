@@ -45,7 +45,14 @@ export const stripMetadata = (input: string, output: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     ffmpeg(input)
       .noVideo() //Quitar caratula
-      .outputOptions(["-map_metadata -1", "-sn"]) //Quita tags y lyrics
+      .outputOptions([
+        "-map 0:a", // SELECCIÓN: Solo copia el flujo de audio, ignora todo lo demás
+        "-map_metadata -1", // LIMPIEZA: Borra metadatos globales (título, artista, etc.)
+        "-map_chapters -1", // LIMPIEZA: Borra marcas de capítulos
+        "-sn", // LIMPIEZA: Elimina subtítulos o letras (lyrics)
+        "-dn", // LIMPIEZA: Elimina flujos de datos (metadatos de hardware, etc.)
+        "-c:a copy", // CALIDAD: Copia el audio tal cual, sin re-codificar (evita pérdida de calidad)
+      ])
       .on("end", () => resolve())
       .on("error", (err: Error) => {
         reject(new Error(`Error al limpiar metadatos: ${err.message}`));

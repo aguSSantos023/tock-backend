@@ -22,11 +22,11 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
-  // Validar solo archivos de audio (mimetype: audio/mp3, audio/wav, etc.)
-  if (file.mimetype.startsWith("audio/")) {
+  // Validar solo archivos mp3
+  if (file.mimetype === "audio/mpeg") {
     cb(null, true);
   } else {
-    cb(new Error("Solo se permiten archivos de audio"), false);
+    cb(new Error("Solo se permiten archivos mp3"), false);
   }
 };
 
