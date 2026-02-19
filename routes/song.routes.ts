@@ -3,7 +3,7 @@ import { authenticateToken } from "../middlewares/auth.middlewares";
 import { upload } from "../middlewares/upload.middlewares";
 import {
   deleteSong,
-  getAllSongs,
+  getSongsPaged,
   getSongFile,
   uploadSong,
 } from "../controllers/songs.controller";
@@ -14,7 +14,7 @@ songRouter.use(authenticateToken);
 
 songRouter.post("/", upload.single("file"), uploadSong);
 songRouter.get("/:id/audio", getSongFile);
-songRouter.get("/", getAllSongs);
+songRouter.get("/", getSongsPaged);
 songRouter.delete("/:id", deleteSong);
 
 export default songRouter;

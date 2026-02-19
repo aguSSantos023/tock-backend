@@ -133,34 +133,47 @@ export const getSongFile = async (
   }
 };
 
-export const getAllSongs = async (
+export const getSongsPaged = async (
   req: Request,
   res: Response,
 ): Promise<any> => {
   const userId = req.userId;
 
-  if (!userId) return res.status(401).json({ error: "Token inválido" });
+  // Recogemos parámetros de la query con valores por defecto
+  const limit = parseInt(req.query.limit as string) || 40;
+  const page = parseInt(req.query.page as string) || 1;
+  const skip = (page - 1) * limit;
 
   try {
     const songs = await prisma.song.findMany({
-      where: { user_id: userId },
+      where: {
+        user_id: userId,
+      },
+      take: limit,
+      skip: skip,
       select: {
         id: true,
         title: true,
+        artist: true,
+        duration: true,
         file_size: true,
-        created_at: true,
+      },
+      orderBy: {
+        created_at: "desc",
       },
     });
 
-    const songsReady = songs.map((song: any) => ({
-      id: song.id,
-      title: song.title,
-      file_size: song.file_size,
-      created_at: song.created_at,
+    const songsReady = songs.map((song) => ({
+      ...song,
+      file_size: Number(song.file_size),
       audio_url: `/api/songs/${song.id}/audio`,
     }));
 
-    return res.json(songsReady);
+    return res.status(200).json({
+      page,
+      limit,
+      data: songsReady,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener las canciones" });
