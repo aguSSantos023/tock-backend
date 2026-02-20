@@ -9,6 +9,10 @@ import {
   getMetadata,
   stripMetadata,
 } from "../services/audio.service";
+import {
+  generateRandomCode,
+  getShufflerConfig,
+} from "../services/shuffler.service";
 
 export const uploadSong = async (
   req: Request,
@@ -80,6 +84,8 @@ export const uploadSong = async (
           album: (tags.album || "Single").substring(0, 50),
           duration: Math.round(metadata.format.duration || 0),
           year: tags.date ? parseInt(tags.date.substring(0, 4)) : null,
+          order_par: generateRandomCode(),
+          order_impar: generateRandomCode(),
           file_path: finalPath,
           file_size: finalSize,
           user_id: userId,
@@ -116,10 +122,14 @@ export const getSongFile = async (
   res: Response,
 ): Promise<any> => {
   const { id } = req.params;
+  const { oppositeCol } = getShufflerConfig();
 
   try {
-    const song = await prisma.song.findUnique({
+    const song = await prisma.song.update({
       where: { id: Number(id) },
+      data: {
+        [oppositeCol]: generateRandomCode(),
+      },
     });
 
     if (!song) return res.status(404).json({ error: "Canción no encontrada" });
@@ -144,6 +154,8 @@ export const getSongsPaged = async (
   const page = parseInt(req.query.page as string) || 1;
   const skip = (page - 1) * limit;
 
+  const { currentCol } = getShufflerConfig();
+
   try {
     const songs = await prisma.song.findMany({
       where: {
@@ -159,7 +171,7 @@ export const getSongsPaged = async (
         file_size: true,
       },
       orderBy: {
-        created_at: "desc",
+        [currentCol]: "asc",
       },
     });
 

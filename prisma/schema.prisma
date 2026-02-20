@@ -40,4 +40,7 @@ model Song {
 
   user          User     @relation(fields: [user_id], references: [id])
   user_id       Int
+
+  @@index([user_id, order_par])
+  @@index([user_id, order_impar])
 }
