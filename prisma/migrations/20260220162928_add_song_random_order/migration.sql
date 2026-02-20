@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Song` ADD COLUMN `order_impar` VARCHAR(3) NOT NULL DEFAULT 'AAA',
+    ADD COLUMN `order_par` VARCHAR(3) NOT NULL DEFAULT 'AAA';
