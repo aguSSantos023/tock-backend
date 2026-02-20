@@ -26,16 +26,21 @@ model User {
 }
 
 model Song {
-  id         Int      @id @default(autoincrement())
-  title      String   @db.VarChar(50)
-  artist     String   @default("Unknown artist") @db.VarChar(50)
-  album      String   @default("Single") @db.VarChar(50)
-  duration   Int      @default(0)   
-  year       Int?     
-  file_path  String
-  file_size  BigInt
-  created_at DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  title         String   @db.VarChar(50)
+  artist        String   @default("Unknown artist") @db.VarChar(50)
+  album         String   @default("Single") @db.VarChar(50)
+  duration      Int      @default(0)   
+  year          Int?     
+  order_par     String   @default("AAA") @db.VarChar(3)
+  order_impar   String   @default("AAA") @db.VarChar(3)
+  file_path     String
+  file_size     BigInt
+  created_at    DateTime @default(now())
 
-  user       User     @relation(fields: [user_id], references: [id])
-  user_id    Int
+  user          User     @relation(fields: [user_id], references: [id])
+  user_id       Int
+
+  @@index([user_id, order_par])
+  @@index([user_id, order_impar])
 }

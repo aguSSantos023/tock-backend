@@ -1,4 +1,5 @@
 import { prisma } from "../utils/db";
+import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
@@ -9,6 +10,10 @@ import {
   getMetadata,
   stripMetadata,
 } from "../services/audio.service";
+import {
+  generateRandomCode,
+  getShufflerConfig,
+} from "../services/shuffler.service";
 
 export const uploadSong = async (
   req: Request,
@@ -80,6 +85,8 @@ export const uploadSong = async (
           album: (tags.album || "Single").substring(0, 50),
           duration: Math.round(metadata.format.duration || 0),
           year: tags.date ? parseInt(tags.date.substring(0, 4)) : null,
+          order_par: generateRandomCode(),
+          order_impar: generateRandomCode(),
           file_path: finalPath,
           file_size: finalSize,
           user_id: userId,
@@ -116,10 +123,14 @@ export const getSongFile = async (
   res: Response,
 ): Promise<any> => {
   const { id } = req.params;
+  const { oppositeCol } = getShufflerConfig();
 
   try {
-    const song = await prisma.song.findUnique({
+    const song = await prisma.song.update({
       where: { id: Number(id) },
+      data: {
+        [oppositeCol]: generateRandomCode(),
+      },
     });
 
     if (!song) return res.status(404).json({ error: "Canción no encontrada" });
@@ -133,34 +144,49 @@ export const getSongFile = async (
   }
 };
 
-export const getAllSongs = async (
+export const getSongsPaged = async (
   req: Request,
   res: Response,
 ): Promise<any> => {
   const userId = req.userId;
 
-  if (!userId) return res.status(401).json({ error: "Token inválido" });
+  // Recogemos parámetros de la query con valores por defecto
+  const limit = parseInt(req.query.limit as string) || 40;
+  const page = parseInt(req.query.page as string) || 1;
+  const skip = (page - 1) * limit;
+
+  const { currentCol } = getShufflerConfig();
 
   try {
     const songs = await prisma.song.findMany({
-      where: { user_id: userId },
+      where: {
+        user_id: userId,
+      },
+      take: limit,
+      skip: skip,
       select: {
         id: true,
         title: true,
+        artist: true,
+        duration: true,
         file_size: true,
-        created_at: true,
+      },
+      orderBy: {
+        [currentCol]: "asc",
       },
     });
 
-    const songsReady = songs.map((song: any) => ({
-      id: song.id,
-      title: song.title,
-      file_size: song.file_size,
-      created_at: song.created_at,
+    const songsReady = songs.map((song) => ({
+      ...song,
+      file_size: Number(song.file_size),
       audio_url: `/api/songs/${song.id}/audio`,
     }));
 
-    return res.json(songsReady);
+    return res.status(200).json({
+      page,
+      limit,
+      data: songsReady,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al obtener las canciones" });
@@ -210,5 +236,53 @@ export const deleteSong = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error("Error eliminando canción:", error);
     return res.status(500).json({ error: "Error al eliminar la canción" });
+  }
+};
+
+export const shuffleListNow = async (
+  req: Request,
+  res: Response,
+): Promise<any> => {
+  const userId = req.userId;
+  const limit = parseInt(req.query.limit as string) || 40;
+  const { currentCol } = getShufflerConfig();
+
+  try {
+    await prisma.$executeRaw`
+      UPDATE Song 
+      SET ${Prisma.raw(currentCol)} = LEFT(UPPER(MD5(RAND())), 3)
+      WHERE user_id = ${userId}
+    `;
+
+    const songs = await prisma.song.findMany({
+      where: { user_id: userId },
+      take: limit,
+      skip: 0,
+      select: {
+        id: true,
+        title: true,
+        artist: true,
+        duration: true,
+        file_size: true,
+      },
+      orderBy: {
+        [currentCol]: "asc",
+      },
+    });
+
+    const songsReady = songs.map((song) => ({
+      ...song,
+      file_size: Number(song.file_size),
+      audio_url: `/api/songs/${song.id}/audio`,
+    }));
+
+    return res.status(200).json({
+      page: 1,
+      limit,
+      data: songsReady,
+    });
+  } catch (error) {
+    console.error("Error al aleatorizar la lista:", error);
+    return res.status(500).json({ error: "Error interno al aleatorizar" });
   }
 };
