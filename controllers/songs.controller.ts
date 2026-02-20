@@ -1,4 +1,5 @@
 import { prisma } from "../utils/db";
+import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
@@ -235,5 +236,53 @@ export const deleteSong = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error("Error eliminando canción:", error);
     return res.status(500).json({ error: "Error al eliminar la canción" });
+  }
+};
+
+export const shuffleListNow = async (
+  req: Request,
+  res: Response,
+): Promise<any> => {
+  const userId = req.userId;
+  const limit = parseInt(req.query.limit as string) || 40;
+  const { currentCol } = getShufflerConfig();
+
+  try {
+    await prisma.$executeRaw`
+      UPDATE Song 
+      SET ${Prisma.raw(currentCol)} = LEFT(UPPER(MD5(RAND())), 3)
+      WHERE user_id = ${userId}
+    `;
+
+    const songs = await prisma.song.findMany({
+      where: { user_id: userId },
+      take: limit,
+      skip: 0,
+      select: {
+        id: true,
+        title: true,
+        artist: true,
+        duration: true,
+        file_size: true,
+      },
+      orderBy: {
+        [currentCol]: "asc",
+      },
+    });
+
+    const songsReady = songs.map((song) => ({
+      ...song,
+      file_size: Number(song.file_size),
+      audio_url: `/api/songs/${song.id}/audio`,
+    }));
+
+    return res.status(200).json({
+      page: 1,
+      limit,
+      data: songsReady,
+    });
+  } catch (error) {
+    console.error("Error al aleatorizar la lista:", error);
+    return res.status(500).json({ error: "Error interno al aleatorizar" });
   }
 };

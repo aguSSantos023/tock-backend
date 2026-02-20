@@ -6,6 +6,7 @@ import {
   getSongsPaged,
   getSongFile,
   uploadSong,
+  shuffleListNow,
 } from "../controllers/songs.controller";
 
 const songRouter = Router();
@@ -16,5 +17,6 @@ songRouter.post("/", upload.single("file"), uploadSong);
 songRouter.get("/:id/audio", getSongFile);
 songRouter.get("/", getSongsPaged);
 songRouter.delete("/:id", deleteSong);
+songRouter.post("/shuffle", shuffleListNow);
 
 export default songRouter;
