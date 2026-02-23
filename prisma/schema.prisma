@@ -20,6 +20,9 @@ model User {
   password      String
   storage_limit BigInt   @default(52428800) // 50MB
   storage_used  BigInt   @default(0)
+  is_verified   Boolean  @default(false)
+  otp_code      String?   @db.VarChar(4)
+  otp_create_at DateTime @default(now())
   created_at    DateTime @default(now())
 
   songs Song[]
