@@ -3,17 +3,10 @@ import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
-import {
-  convertToOpus,
-  deleteFile,
-  generateFinalName,
-  getMetadata,
-  stripMetadata,
-} from "../services/audio.service";
-import {
-  generateRandomCode,
-  getShufflerConfig,
-} from "../services/shuffler.service";
+
+import { generateHexadecimalCode } from "../utils/codes";
+import { AudioService } from "../services/audio.service";
+import { getShufflerConfig } from "../utils/shuffler";
 
 export const uploadSong = async (
   req: Request,
@@ -28,7 +21,7 @@ export const uploadSong = async (
   }
 
   if (!title) {
-    deleteFile(file.path);
+    AudioService.deleteFile(file.path);
     return res.status(400).json({ error: "El título es obligatorio" });
   }
 
@@ -45,16 +38,16 @@ export const uploadSong = async (
   );
 
   try {
-    const metadata = await getMetadata(file.path);
+    const metadata = await AudioService.getMetadata(file.path);
     const tags = metadata.format.tags || {};
 
     // Convertir a Opus
-    await convertToOpus(file.path, rawOpusPath);
-    deleteFile(file.path);
+    await AudioService.convertToOpus(file.path, rawOpusPath);
+    AudioService.deleteFile(file.path);
 
     // Limpieza de metadata
-    await stripMetadata(rawOpusPath, cleanOpusPath);
-    deleteFile(rawOpusPath);
+    await AudioService.stripMetadata(rawOpusPath, cleanOpusPath);
+    AudioService.deleteFile(rawOpusPath);
 
     // Validacion de espacio
     const stats = fs.statSync(cleanOpusPath);
@@ -66,14 +59,14 @@ export const uploadSong = async (
     });
 
     if (!user || user.storage_used + finalSize > user.storage_limit) {
-      deleteFile(cleanOpusPath);
+      AudioService.deleteFile(cleanOpusPath);
       return res
         .status(403)
         .json({ error: "Espacio insuficiente o usuario no encontrado" });
     }
 
     // Mover song a carpeta final (uploads/) con nombre definitivo
-    const finalFileName = generateFinalName();
+    const finalFileName = AudioService.generateFinalName();
     const finalPath = path.join("uploads", finalFileName);
     fs.renameSync(cleanOpusPath, finalPath);
 
@@ -85,8 +78,8 @@ export const uploadSong = async (
           album: (tags.album || "Single").substring(0, 50),
           duration: Math.round(metadata.format.duration || 0),
           year: tags.date ? parseInt(tags.date.substring(0, 4)) : null,
-          order_par: generateRandomCode(),
-          order_impar: generateRandomCode(),
+          order_par: generateHexadecimalCode(3),
+          order_impar: generateHexadecimalCode(3),
           file_path: finalPath,
           file_size: finalSize,
           user_id: userId,
@@ -112,7 +105,7 @@ export const uploadSong = async (
     console.error(`[UPLOAD_ERROR] [User: ${userId}]: ${err.message}`);
 
     // CLEANUP: Si falla la BD se borra el archivo físico
-    [file.path, rawOpusPath, cleanOpusPath].forEach(deleteFile);
+    [file.path, rawOpusPath, cleanOpusPath].forEach(AudioService.deleteFile);
 
     return res.status(500).json({ error: "Error interno procesando el audio" });
   }
@@ -129,7 +122,7 @@ export const getSongFile = async (
     const song = await prisma.song.update({
       where: { id: Number(id) },
       data: {
-        [oppositeCol]: generateRandomCode(),
+        [oppositeCol]: generateHexadecimalCode(33),
       },
     });
 

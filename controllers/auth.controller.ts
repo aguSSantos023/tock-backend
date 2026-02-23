@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../utils/db";
 import { generateToken } from "../utils/jwt";
+import { EmailService } from "../services/email.service";
 
 export const register = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -26,6 +27,8 @@ export const register = async (req: Request, res: Response): Promise<any> => {
         password: hashedPassword,
       },
     });
+
+    await EmailService.sendVerificationCode(newUser.id, newUser.email);
 
     const token = generateToken(newUser.id);
 
