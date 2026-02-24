@@ -1,4 +1,8 @@
-import { authenticateToken } from "../middlewares/auth.middlewares";
+import { authenticateToken } from "../middlewares/auth.middleware";
+import {
+  checkLoginStatus,
+  checkRegisterStatus,
+} from "../middlewares/config.middleware";
 import {
   login,
   register,
@@ -9,8 +13,8 @@ import { Router } from "express";
 
 const authRoutes = Router();
 
-authRoutes.post("/login", login);
-authRoutes.post("/register", register);
+authRoutes.post("/login", checkLoginStatus, login);
+authRoutes.post("/register", checkRegisterStatus, register);
 
 authRoutes.post("/verify-otp", authenticateToken, verifyOtp);
 authRoutes.post("/resend-otp", authenticateToken, resendOtp);

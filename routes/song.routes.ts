@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.middlewares";
-import { upload } from "../middlewares/upload.middlewares";
+import { authenticateToken } from "../middlewares/auth.middleware";
+import { upload } from "../middlewares/upload.middleware";
 import {
   deleteSong,
   getSongsPaged,
