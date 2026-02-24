@@ -132,3 +132,29 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
+
+export const resendOtp = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = req.userId as number;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (user.is_verified) {
+      return res
+        .status(400)
+        .json({ message: "Esta cuenta ya está verificada" });
+    }
+
+    await EmailService.sendVerificationCode(user.id, user.email);
+
+    return res.status(200).json({ message: "Nuevo código enviado al correo" });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al reenviar el código" });
+  }
+};
