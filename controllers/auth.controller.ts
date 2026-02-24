@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../utils/db";
 import { generateToken } from "../utils/jwt";
+import { EmailService } from "../services/email.service";
 
 export const register = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -26,6 +27,8 @@ export const register = async (req: Request, res: Response): Promise<any> => {
         password: hashedPassword,
       },
     });
+
+    await EmailService.sendVerificationCode(newUser.id, newUser.email);
 
     const token = generateToken(newUser.id);
 
@@ -80,5 +83,78 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error al iniciar sesion" });
+  }
+};
+
+export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { otpCode } = req.body;
+    const userId = req.userId as number;
+
+    // Buscar al usuario
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.otp_code) {
+      return res.status(404).json({ error: "Usuario o código no encontrado" });
+    }
+
+    // Verificar expiración (15 minutos)
+    const fifteenMinutes = 15 * 60 * 1000;
+    const timePassed = Date.now() - user.otp_create_at.getTime();
+
+    if (timePassed > fifteenMinutes) {
+      // Generamos y enviamos uno nuevo automáticamente
+      await EmailService.sendVerificationCode(user.id, user.email);
+
+      return res.status(403).json({
+        message: "El código ha expirado. Te hemos enviado uno nuevo.",
+      });
+    }
+
+    // Validar el código
+    if (user.otp_code !== otpCode.toUpperCase()) {
+      return res.status(400).json({ error: "Código no válido" });
+    }
+
+    // Verificación exitosa
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        is_verified: true,
+        otp_code: null,
+      },
+    });
+
+    return res.status(200).json({ message: "Cuenta verificada con éxito" });
+  } catch (error) {
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+export const resendOtp = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = req.userId as number;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (user.is_verified) {
+      return res
+        .status(400)
+        .json({ message: "Esta cuenta ya está verificada" });
+    }
+
+    await EmailService.sendVerificationCode(user.id, user.email);
+
+    return res.status(200).json({ message: "Nuevo código enviado al correo" });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al reenviar el código" });
   }
 };
