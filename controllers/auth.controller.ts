@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../utils/db";
 import { generateToken } from "../utils/jwt";
 import { EmailService } from "../services/email.service";
+import jwt from "jsonwebtoken";
 
 export const register = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -74,6 +75,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     return res.status(200).json({
       message: "Login exitoso",
       token,
+      isVerified: user.is_verified,
       user: {
         id: user.id,
         email: user.email,
@@ -156,5 +158,43 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
     return res.status(200).json({ message: "Nuevo código enviado al correo" });
   } catch (error) {
     return res.status(500).json({ message: "Error al reenviar el código" });
+  }
+};
+
+export const checkAuth = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) return res.status(200).json({ status: "unauthenticated" });
+
+    // Decodificar token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+      id: number;
+    };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { is_verified: true },
+    });
+
+    if (!user) {
+      return res.status(200).json({ status: "unauthenticated" });
+    }
+
+    // Validar si está verificado
+    if (!user.is_verified) {
+      return res.status(200).json({
+        status: "unverified",
+      });
+    }
+
+    return res.status(200).json({
+      status: "authenticated",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(200).json({ status: "unauthenticated" });
   }
 };

@@ -4,6 +4,7 @@ import {
   checkRegisterStatus,
 } from "../middlewares/config.middleware";
 import {
+  checkAuth,
   login,
   register,
   resendOtp,
@@ -18,5 +19,7 @@ authRoutes.post("/register", checkRegisterStatus, register);
 
 authRoutes.post("/verify-otp", authenticateToken, verifyOtp);
 authRoutes.post("/resend-otp", authenticateToken, resendOtp);
+
+authRoutes.post("/validate-token", checkAuth);
 
 export default authRoutes;
