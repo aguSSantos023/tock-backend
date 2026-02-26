@@ -148,16 +148,14 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
     }
 
     if (user.is_verified) {
-      return res
-        .status(400)
-        .json({ message: "Esta cuenta ya está verificada" });
+      return res.status(400).json({ error: "Esta cuenta ya está verificada" });
     }
 
     await EmailService.sendVerificationCode(user.id, user.email);
 
     return res.status(200).json({ message: "Nuevo código enviado al correo" });
   } catch (error) {
-    return res.status(500).json({ message: "Error al reenviar el código" });
+    return res.status(500).json({ error: "Error al reenviar el código" });
   }
 };
 
