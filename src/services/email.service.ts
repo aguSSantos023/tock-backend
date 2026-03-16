@@ -1,6 +1,8 @@
-import { resend } from "../lib/resend";
+import { Resend } from "resend";
 import { generateHexadecimalCode } from "../utils/codes";
 import { prisma } from "../utils/db";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const EmailService = {
   async sendVerificationCode(userId: number, email: string) {

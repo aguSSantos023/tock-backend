@@ -2,6 +2,7 @@ import express from "express";
 import router from "./routes/routes";
 import cors from "cors";
 import { CleanupService } from "./services/cleanup.service";
+import { setupSwagger } from "./config/swagger";
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -17,6 +18,8 @@ app.use(
 );
 
 app.use(express.json());
+
+setupSwagger(app);
 
 app.use("/api", router);
 
