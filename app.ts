@@ -8,7 +8,6 @@ import { CleanupService } from "./services/cleanup.service";
 };
 
 const app = express();
-const port = process.env.PORT;
 
 app.use(
   cors({
@@ -21,8 +20,8 @@ app.use(express.json());
 
 app.use("/api", router);
 
-CleanupService.initCleanupCron();
+if (process.env.NODE_ENV !== "test") {
+  CleanupService.initCleanupCron();
+}
 
-app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
-});
+export default app;
