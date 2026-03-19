@@ -19,7 +19,10 @@ export const AudioService = {
     return new Promise((resolve, reject) => {
       ffmpeg(input)
         .toFormat("opus")
-        .outputOptions("-threads 1") // Forzamos un solo hilo
+        .outputOptions([
+          "-threads 1", // Forzamos un solo hilo
+          "-acodec libopus",
+        ])
         .on("end", () => resolve())
         .on("error", (err: Error) =>
           reject(new Error(`Error en conversión: ${err.message}`)),
@@ -34,6 +37,7 @@ export const AudioService = {
       ffmpeg(input)
         .noVideo()
         .outputOptions([
+          "-threads 1",
           "-map 0:a",
           "-map_metadata -1",
           "-map_chapters -1",
@@ -55,7 +59,13 @@ export const AudioService = {
     return `${Date.now()}-${random}.opus`;
   },
 
-  deleteFile(filePath: string): void {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  deleteFile(filePath: string | null): void {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (e) {
+        console.warn(`[FILE_SYSTEM] No se pudo borrar: ${filePath}`);
+      }
+    }
   },
 };
