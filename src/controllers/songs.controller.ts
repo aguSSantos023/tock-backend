@@ -30,14 +30,14 @@ export const uploadSong = async (
       select: { storage_used: true, storage_limit: true },
     });
 
-    const MARGIN_3MB = BigInt(3 * 1024 * 1024);
+    const MARGIN_5MB = BigInt(5 * 1024 * 1024);
 
-    if (!user || user.storage_limit - user.storage_used < MARGIN_3MB) {
+    if (!user || user.storage_limit - user.storage_used < MARGIN_5MB) {
       AudioService.deleteFile(file.path);
 
-      return res.status(403).json({
+      return res.status(507).json({
         error:
-          "Límite de almacenamiento crítico alcanzado (mínimo 3MB libres requeridos)",
+          "Límite de almacenamiento crítico alcanzado (mínimo 5MB libres requeridos)",
       });
     }
 
@@ -70,6 +70,7 @@ export const uploadSong = async (
       AudioService.getMetadata(file.path),
     );
     const tags = metadata.format.tags || {};
+    const fallbackTitle = file.originalname.replace(/\.[^/.]+$/, "");
 
     // PIPELINE DINÁMICO
     if (!isOpus) {
@@ -119,7 +120,12 @@ export const uploadSong = async (
 
         const song = await tx.song.create({
           data: {
-            title: (title || tags.title || "Sin título").substring(0, 50),
+            title: (
+              title ||
+              tags.title ||
+              fallbackTitle ||
+              "Sin título"
+            ).substring(0, 50),
             artist: (tags.artist || "Artista desconocido").substring(0, 50),
             album: (tags.album || "Single").substring(0, 50),
             duration: Math.round(metadata.format.duration || 0),
