@@ -5,6 +5,13 @@ import path from "path";
 const uploadDir = "uploads";
 const tempDir = path.join("uploads", "temp");
 
+const ALLOWED_MIMETYPES = [
+  "audio/mpeg", // Para .mp3
+  "audio/mp3", // Algunos sistemas lo envían así
+  "audio/opus", // .opus
+  "audio/ogg", // .opus dentro de ogg
+];
+
 // Crear carpeta upload si no existe (evita crash al inicio)
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -22,11 +29,11 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
-  // Validar solo archivos mp3
-  if (file.mimetype === "audio/mpeg") {
+  // Validar contra el array de los permitidos
+  if (ALLOWED_MIMETYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Solo se permiten archivos mp3"), false);
+    cb(new Error("Solo se permiten archivos mp3 y opus"), false);
   }
 };
 

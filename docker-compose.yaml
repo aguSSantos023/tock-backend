@@ -61,11 +61,15 @@ services:
       context: ../tock-frontend
       dockerfile: Dockerfile.dev
     container_name: tock_angular_frontend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     ports:
       - "4200:4200"
     volumes:
       - ../tock-frontend:/app
       - /app/node_modules
+      - /app/.angular
     networks:
       - tock-network
 
