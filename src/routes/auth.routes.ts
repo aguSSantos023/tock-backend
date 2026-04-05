@@ -1,3 +1,4 @@
+import { validate } from "middlewares/validate.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import {
   checkLoginStatus,
@@ -5,20 +6,37 @@ import {
 } from "../middlewares/config.middleware";
 import {
   checkAuth,
+  deleteAccount,
   login,
+  logout,
   register,
   resendOtp,
   verifyOtp,
 } from "./../controllers/auth.controller";
 import { Router } from "express";
+import { loginSchema, otpSchema, registerSchema } from "schemas/auth.schema";
 
 const authRoutes = Router();
 
-authRoutes.post("/login", checkLoginStatus, login);
-authRoutes.post("/register", checkRegisterStatus, register);
+authRoutes.post(
+  "/register",
+  checkRegisterStatus,
+  validate(registerSchema),
+  register,
+);
+authRoutes.post("/login", checkLoginStatus, validate(loginSchema), login);
 
-authRoutes.post("/verify-otp", authenticateToken, verifyOtp);
+authRoutes.post(
+  "/verify-otp",
+  authenticateToken,
+  validate(otpSchema),
+  verifyOtp,
+);
 authRoutes.post("/resend-otp", authenticateToken, resendOtp);
+
+authRoutes.post("/logout", authenticateToken, logout);
+
+authRoutes.delete("/delete-account", authenticateToken, deleteAccount);
 
 authRoutes.post("/validate-token", checkAuth);
 

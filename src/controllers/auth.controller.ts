@@ -3,21 +3,16 @@ import { prisma } from "../config/db";
 import { generateToken } from "../utils/jwt";
 import { EmailService } from "../services/email.service";
 import jwt from "jsonwebtoken";
+import { AudioService } from "services/audio.service";
 
 export const register = async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "Email y contraseña son obligatorios" });
-    }
-
     const existUser = await prisma.user.findUnique({ where: { email } });
 
     if (existUser) {
-      return res.status(400).json({ error: "El usuario ya existe" });
+      return res.status(400).json({ message: "El usuario ya existe" });
     }
 
     const hashedPassword = await Bun.password.hash(password);
@@ -33,9 +28,11 @@ export const register = async (req: Request, res: Response): Promise<any> => {
 
     const token = generateToken(newUser.id);
 
-    return res.status(201).json({
-      message: "Usuario creado con éxito",
-      token,
+    setAuthCookie(res, token);
+
+    return res.status(200).json({
+      message: "Register exitoso",
+      isVerified: newUser.is_verified,
       user: {
         id: newUser.id,
         email: newUser.email,
@@ -44,7 +41,7 @@ export const register = async (req: Request, res: Response): Promise<any> => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error al registrar usuario" });
+    res.status(500).json({ error: "Error interno al registrar usuario" });
   }
 };
 
@@ -52,29 +49,22 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "Email y contraseña son obligatorios" });
-    }
-
     const user = await prisma.user.findUnique({ where: { email } });
-
     if (!user) {
-      return res.status(400).json({ error: "Usuario no encontrado" });
+      return res.status(400).json({ message: "Usuario no encontrado" });
     }
 
     const isPasswordValid = await Bun.password.verify(password, user.password);
-
     if (!isPasswordValid) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({ message: "Credenciales inválidas" });
     }
 
     const token = generateToken(user.id);
 
+    setAuthCookie(res, token);
+
     return res.status(200).json({
       message: "Login exitoso",
-      token,
       isVerified: user.is_verified,
       user: {
         id: user.id,
@@ -84,8 +74,19 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error al iniciar sesion" });
+    res.status(500).json({ error: "Error crítico al iniciar sesión" });
   }
+};
+
+export const logout = (req: Request, res: Response) => {
+  res.clearCookie("auth_token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+
+  return res.status(200).json({ message: "Sesión cerrada" });
 };
 
 export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
@@ -93,13 +94,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
     const { otpCode } = req.body;
     const userId = req.userId as number;
 
-    // Buscar al usuario
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
 
     if (!user || !user.otp_code) {
-      return res.status(404).json({ error: "Usuario o código no encontrado" });
+      return res
+        .status(404)
+        .json({ message: "Usuario o código no encontrado" });
     }
 
     // Verificar expiración (15 minutos)
@@ -116,8 +118,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
     }
 
     // Validar el código
-    if (user.otp_code !== otpCode.toUpperCase()) {
-      return res.status(400).json({ error: "Código no válido" });
+    if (user.otp_code !== otpCode) {
+      return res.status(400).json({ message: "Código no válido" });
     }
 
     // Verificación exitosa
@@ -131,7 +133,9 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
 
     return res.status(200).json({ message: "Cuenta verificada con éxito" });
   } catch (error) {
-    return res.status(500).json({ message: "Error interno del servidor" });
+    res
+      .status(500)
+      .json({ error: "Error interno en la verificación de cuenta" });
   }
 };
 
@@ -144,11 +148,13 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     if (user.is_verified) {
-      return res.status(400).json({ error: "Esta cuenta ya está verificada" });
+      return res
+        .status(400)
+        .json({ message: "Esta cuenta ya está verificada" });
     }
 
     await EmailService.sendVerificationCode(user.id, user.email);
@@ -161,8 +167,7 @@ export const resendOtp = async (req: Request, res: Response): Promise<any> => {
 
 export const checkAuth = async (req: Request, res: Response): Promise<any> => {
   try {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
+    const token = req.cookies.auth_token;
 
     if (!token) return res.status(200).json({ status: "unauthenticated" });
 
@@ -173,26 +178,76 @@ export const checkAuth = async (req: Request, res: Response): Promise<any> => {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { is_verified: true },
+      select: {
+        is_verified: true,
+        email: true,
+        storage_used: true,
+        storage_limit: true,
+      },
     });
 
     if (!user) {
       return res.status(200).json({ status: "unauthenticated" });
     }
 
-    // Validar si está verificado
-    if (!user.is_verified) {
-      return res.status(200).json({
-        status: "unverified",
-      });
-    }
-
     return res.status(200).json({
-      status: "authenticated",
+      status: user.is_verified ? "authenticated" : "unverified",
+      user: {
+        email: user.email,
+        storage_used: user.storage_used.toString(), // Convertimos BigInt a String
+        storage_limit: user.storage_limit.toString(),
+      },
     });
   } catch (error) {
     console.error(error);
 
     return res.status(200).json({ status: "unauthenticated" });
   }
+};
+
+export const deleteAccount = async (
+  req: Request,
+  res: Response,
+): Promise<any> => {
+  try {
+    const userId = req.userId as number;
+
+    const songs = await prisma.song.findMany({
+      where: { user_id: userId },
+      select: { file_path: true },
+    });
+
+    for (const song of songs) {
+      AudioService.deleteFile(song.file_path);
+    }
+
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    res.clearCookie("auth_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return res
+      .status(200)
+      .json({ message: "Cuenta y datos eliminados correctamente" });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({ error: "Error al eliminar la cuenta" });
+  }
+};
+
+const setAuthCookie = (res: Response, token: string) => {
+  res.cookie("auth_token", token, {
+    httpOnly: true, // Inaccesible para JS
+    secure: process.env.NODE_ENV === "production", // HTTPS en producción
+    sameSite: "lax", // Protección contra CSRF
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/", // Disponible en toda la app
+  });
 };
