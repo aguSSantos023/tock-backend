@@ -32,6 +32,7 @@ authRoutes.post(
   validate(otpSchema),
   verifyOtp,
 );
+
 authRoutes.post("/resend-otp", authenticateToken, resendOtp);
 
 authRoutes.post("/logout", authenticateToken, logout);

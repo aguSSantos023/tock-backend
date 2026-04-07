@@ -133,12 +133,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
       },
     });
 
-    return res
-      .status(200)
-      .json({
-        message: "Cuenta verificada con éxito",
-        status: "authenticated",
-      });
+    return res.status(200).json({
+      message: "Cuenta verificada con éxito",
+      status: "authenticated",
+    });
   } catch (error) {
     res
       .status(500)
