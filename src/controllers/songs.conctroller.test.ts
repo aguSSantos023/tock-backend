@@ -113,6 +113,107 @@ describe("Songs Controller - uploadSong", () => {
     expect(prisma.song.create).toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(201);
   });
+
+  it("debería saltar la conversión si el archivo ya es Opus", async () => {
+    mockReq = {
+      body: { title: "Ya soy Opus" },
+      userId: 1,
+      file: {
+        path: "temp/original.opus",
+        mimetype: "audio/opus",
+        originalname: "original.opus",
+      },
+    };
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      storage_limit: BigInt(100 * 1024 * 1024),
+      storage_used: BigInt(0),
+    });
+
+    await uploadSong(mockReq, mockRes);
+
+    expect(AudioService.convertToOpus).not.toHaveBeenCalled();
+    // Verifica que se intentó renombrar el archivo original directamente
+    const fs = await import("fs");
+    expect(fs.default.renameSync).toHaveBeenCalledWith(
+      "temp/original.opus",
+      expect.stringContaining("raw-"),
+    );
+  });
+
+  it("debería fallar si el archivo procesado excede el límite final", async () => {
+    mockReq = {
+      body: { title: "Canción Pesada" },
+      userId: 1,
+      file: { path: "t.mp3", mimetype: "audio/mpeg", originalname: "t.mp3" },
+    };
+
+    const limit = BigInt(10 * 1024 * 1024); // 10MB
+    const used = BigInt(4 * 1024 * 1024); // 4MB usado
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      storage_limit: limit,
+      storage_used: used,
+    });
+
+    const fs = await import("fs");
+    (fs.default.statSync as any).mockReturnValue({ size: 7 * 1024 * 1024 });
+
+    await uploadSong(mockReq, mockRes);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: expect.stringContaining("excede tu límite"),
+    });
+  });
+});
+
+describe("Songs Controller - getSongsPaged", () => {
+  it("debería devolver canciones paginadas correctamente", async () => {
+    const mockReq = {
+      userId: 1,
+      query: { limit: "10", page: "2" },
+    } as any;
+    const mockRes = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as any;
+
+    (prisma.song.findMany as any).mockResolvedValue([
+      { id: 1, title: "S1", file_size: BigInt(100) },
+    ]);
+
+    await import("./songs.controller").then((m) =>
+      m.getSongsPaged(mockReq, mockRes),
+    );
+
+    expect(prisma.song.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 10,
+        skip: 10, // (page 2 - 1) * 10
+      }),
+    );
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+  });
+});
+
+describe("Songs Controller - shuffleListNow", () => {
+  it("debería ejecutar el raw query de aleatorización", async () => {
+    const mockReq = { userId: 1, query: {} } as any;
+    const mockRes = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as any;
+
+    (prisma.song.findMany as any).mockResolvedValue([]);
+
+    await import("./songs.controller").then((m) =>
+      m.shuffleListNow(mockReq, mockRes),
+    );
+
+    expect(prisma.$executeRaw).toHaveBeenCalled();
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+  });
 });
 
 describe("Songs Controller - deleteSong", () => {
