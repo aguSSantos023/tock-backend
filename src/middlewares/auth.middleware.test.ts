@@ -8,41 +8,47 @@ describe("middleware authenticateToken", () => {
   let nextFunction: any;
 
   beforeEach(() => {
-    vi.restoreAllMocks(); // Limpia los espías entre tests
+    vi.restoreAllMocks();
 
-    mockReq = { headers: {} };
+    // usamos cookies
+    mockReq = { cookies: {} };
     mockRes = {
       status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
+      json: vi.fn().mockReturnThis(),
+      clearCookie: vi.fn().mockReturnThis(),
     };
     nextFunction = vi.fn();
     process.env.JWT_SECRET = "test_secret";
   });
 
-  it("debería devolver 401 si no hay cabecera de autorización", () => {
+  it("debería devolver 401 si no hay cookie 'auth_token'", () => {
     authenticateToken(mockReq, mockRes, nextFunction);
+
     expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "No autorizado: Token ausente",
+    });
     expect(nextFunction).not.toHaveBeenCalled();
   });
 
-  it("debería devolver 403 si el token es inválido", () => {
-    mockReq.headers["authorization"] = "Bearer token_falso";
+  it("debería devolver 403 y limpiar cookie si el token es inválido", () => {
+    mockReq.cookies.auth_token = "token_falso";
 
-    // spyOn intercepta 'verify' sin romper el resto de la librería jwt
     vi.spyOn(jwt, "verify").mockImplementation(() => {
       throw new Error("Invalid token");
     });
 
     authenticateToken(mockReq, mockRes, nextFunction);
 
+    expect(mockRes.clearCookie).toHaveBeenCalledWith("auth_token");
     expect(mockRes.status).toHaveBeenCalledWith(403);
     expect(mockRes.json).toHaveBeenCalledWith({
-      error: "Token inválido o expirado",
+      message: "Token inválido o expirado",
     });
   });
 
   it("debería setear req.userId y llamar a next() si el token es válido", () => {
-    mockReq.headers["authorization"] = "Bearer token_valido";
+    mockReq.cookies.auth_token = "token_valido";
     const payload = { id: 123 };
 
     vi.spyOn(jwt, "verify").mockReturnValue(payload as any);
