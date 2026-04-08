@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.middlewares";
-import { upload } from "../middlewares/upload.middlewares";
+import { authenticateToken } from "../middlewares/auth.middleware";
+import { upload } from "../middlewares/upload.middleware";
 import {
   deleteSong,
-  getAllSongs,
+  getSongsPaged,
   getSongFile,
   uploadSong,
+  shuffleListNow,
 } from "../controllers/songs.controller";
 
 const songRouter = Router();
@@ -14,7 +15,8 @@ songRouter.use(authenticateToken);
 
 songRouter.post("/", upload.single("file"), uploadSong);
 songRouter.get("/:id/audio", getSongFile);
-songRouter.get("/", getAllSongs);
-songRouter.delete("/:id", deleteSong);
+songRouter.get("/", getSongsPaged);
+songRouter.delete("/", deleteSong);
+songRouter.post("/shuffle", shuffleListNow);
 
 export default songRouter;

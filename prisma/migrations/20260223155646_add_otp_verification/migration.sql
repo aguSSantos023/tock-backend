@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `User` ADD COLUMN `is_verified` BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN `otp_code` VARCHAR(4) NULL,
+    ADD COLUMN `otp_create_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);

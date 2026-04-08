@@ -34,13 +34,15 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: tock_bun_backend
-    restart: on-failure
+    #restart: on-failure
     environment:
       DB_HOST: mysql-db
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
       PORT: 3000
     volumes:
       - .:/app
@@ -53,18 +55,26 @@ services:
         condition: service_healthy
     networks:
       - tock-network
-    command: sh -c "bunx prisma generate && bun --watch index.ts"
+    command: >
+      sh -c "bun install && 
+             bunx prisma generate && 
+             bunx prisma db push && 
+             bun --watch server.ts"
 
   frontend:
     build:
       context: ../tock-frontend
       dockerfile: Dockerfile.dev
     container_name: tock_angular_frontend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     ports:
       - "4200:4200"
     volumes:
       - ../tock-frontend:/app
       - /app/node_modules
+      - /app/.angular
     networks:
       - tock-network
 
